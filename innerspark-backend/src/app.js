@@ -15,19 +15,12 @@ import notificationsRoutes from "./routes/notifications.routes.js";
 
 const app = express();
 
-app.use(helmet());
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  "http://localhost:3000",
-].filter(Boolean);
-
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
-    cb(new Error("Not allowed by CORS"));
-  },
+  origin: (origin, cb) => cb(null, true),
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
