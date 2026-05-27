@@ -139,6 +139,18 @@ export const getProfileById = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, { profile }));
 });
 
+export const getLikedStories = asyncHandler(async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("reactions")
+    .select(`story_id, stories(*, profiles(name, username, avatar_url))`)
+    .eq("user_id", req.user.id)
+    .eq("type", "like")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new ApiError(500, error.message);
+  res.json(new ApiResponse(200, { stories: (data || []).map(d => d.stories).filter(Boolean) }));
+});
+
 export const getSavedStories = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("saved_stories")
