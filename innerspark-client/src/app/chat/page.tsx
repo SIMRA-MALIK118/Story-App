@@ -165,15 +165,10 @@ export default function ChatPage() {
           >
             <Link href={`/chat/${conv.partner.id}`} style={{ textDecoration:"none", display:"flex", alignItems:"center", gap:14, padding:"14px 20px", borderBottom:"1px solid rgba(255,255,255,0.05)", position:"relative" }}>
               {/* Avatar */}
-              <div style={{ width:52, height:52, borderRadius:"50%", background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, overflow:"hidden", position:"relative" }}>
+              <div style={{ width:52, height:52, borderRadius:"50%", background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0, overflow:"hidden" }}>
                 {conv.partner.avatar_url
                   ? <img src={conv.partner.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt={conv.partner.name} />
                   : "👤"}
-                {conv.unread > 0 && (
-                  <div style={{ position:"absolute", top:0, right:0, width:16, height:16, borderRadius:"50%", background:"#EC4899", border:"2px solid #0D0D14", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                    <span style={{ fontSize:9, fontWeight:700, color:"white" }}>{conv.unread > 9 ? "9+" : conv.unread}</span>
-                  </div>
-                )}
               </div>
 
               {/* Content */}
@@ -182,13 +177,23 @@ export default function ChatPage() {
                   <span style={{ fontSize:15, fontWeight: conv.unread > 0 ? 700 : 600, color:"white", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {conv.partner.name || conv.partner.username}
                   </span>
-                  <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)", flexShrink:0, marginLeft:8 }}>
+                  <span style={{ fontSize:11, color: conv.unread > 0 ? "#A78BFA" : "rgba(255,255,255,0.3)", flexShrink:0, marginLeft:8 }}>
                     {timeAgo(conv.latestMessage.created_at)}
                   </span>
                 </div>
-                <p style={{ fontSize:13, color: conv.unread > 0 ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.35)", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight: conv.unread > 0 ? 500 : 400 }}>
-                  {conv.latestMessage.content}
-                </p>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                  <p style={{ fontSize:13, color: conv.unread > 0 ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.35)", margin:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight: conv.unread > 0 ? 600 : 400, flex:1 }}>
+                    {conv.latestMessage.from_user === (user as any)?.id
+                      ? <span style={{ color:"rgba(255,255,255,0.4)" }}>You: </span>
+                      : null}
+                    {conv.latestMessage.content}
+                  </p>
+                  {conv.unread > 0 && (
+                    <div style={{ minWidth:20, height:20, borderRadius:10, background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 5px", flexShrink:0 }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:"white" }}>{conv.unread > 9 ? "9+" : conv.unread}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </Link>
           </motion.div>
