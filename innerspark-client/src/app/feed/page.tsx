@@ -96,7 +96,7 @@ export default function FeedPage() {
 
   useEffect(() => {
     fetchStories();
-    api.get("/notifications/unread-count").then(r => setNotifCount(r.data.data.count || 0)).catch(() => {});
+    api.get("/messages/unread").then(r => setNotifCount(r.data.data.unread || 0)).catch(() => {});
   }, [fetchStories]);
 
   const handleCat = (cat: string) => {
@@ -148,7 +148,7 @@ export default function FeedPage() {
                 <Search size={17} color="rgba(255,255,255,0.6)" />
               </div>
             </Link>
-            <Link href="/notifications" style={{ textDecoration:"none" }}>
+            <Link href="/chat" style={{ textDecoration:"none" }}>
               <div style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
                 <Bell size={17} color="rgba(255,255,255,0.6)" />
                 {notifCount > 0 && (

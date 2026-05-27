@@ -54,7 +54,7 @@ export default function DashboardPage() {
           api.get("/dashboard/stats"),
           api.get("/dashboard/activity"),
           api.get("/dashboard/mood/history?days=1"),
-          api.get("/notifications/unread-count"),
+          api.get("/messages/unread"),
         ]);
         if (statsRes.status === "fulfilled") setStats(statsRes.value.data.data);
         if (activityRes.status === "fulfilled") setActivity(activityRes.value.data.data.activity || []);
@@ -62,7 +62,7 @@ export default function DashboardPage() {
           const todayMood = moodRes.value.data.data.moods?.[0];
           if (todayMood) { setSelectedMood(todayMood.mood); setMoodSaved(true); }
         }
-        if (notifRes.status === "fulfilled") setNotifCount(notifRes.value.data.data.count || 0);
+        if (notifRes.status === "fulfilled") setNotifCount(notifRes.value.data.data.unread || 0);
       } finally {
         setLoading(false);
       }
@@ -111,7 +111,7 @@ export default function DashboardPage() {
             </p>
             <h1 style={{ fontSize:22, fontWeight:800, color:"white", margin:0, letterSpacing:-0.5 }}>Your Growth</h1>
           </div>
-          <Link href="/notifications">
+          <Link href="/chat">
             <div style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
               <Bell size={17} color="rgba(255,255,255,0.6)" />
               {notifCount > 0 && (

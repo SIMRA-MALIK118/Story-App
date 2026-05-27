@@ -1,11 +1,12 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { MessageSquare, Search, Edit2, X, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BottomNav from "@/components/shared/BottomNav";
 import api from "@/services/api";
+import { useAuthStore } from "@/store/authStore";
 
 function timeAgo(date: string) {
   const diff = Date.now() - new Date(date).getTime();
@@ -24,6 +25,7 @@ interface Conversation {
 
 export default function ChatPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -32,13 +34,47 @@ export default function ChatPage() {
   const [foundUser, setFoundUser] = useState<{ id: string; name: string; username: string; avatar_url: string | null } | null>(null);
   const [composeLoading, setComposeLoading] = useState(false);
   const [composeError, setComposeError] = useState("");
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
+  const loadConversations = useCallback(() => {
     api.get("/messages")
       .then(r => setConversations(r.data.data.conversations || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadConversations();
+
+    const onVisibility = () => { if (!document.hidden) loadConversations(); };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const me = (user as any)?.id;
+    if (me) {
+      const connectWS = () => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+        const wsBase = apiUrl.replace("/api", "").replace("https://", "wss://").replace("http://", "ws://");
+        const ws = new WebSocket(`${wsBase}?userId=${me}`);
+        wsRef.current = ws;
+        ws.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === "new_message") loadConversations();
+          } catch {}
+        };
+        ws.onclose = () => { reconnectRef.current = setTimeout(connectWS, 3000); };
+        ws.onerror = () => ws.close();
+      };
+      connectWS();
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      wsRef.current?.close();
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+    };
+  }, [loadConversations, user]);
 
   const searchUser = async () => {
     if (!composeQuery.trim()) return;
