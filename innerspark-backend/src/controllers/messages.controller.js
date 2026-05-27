@@ -6,26 +6,34 @@ import { broadcastToUser } from "../utils/wsClients.js";
 export const getConversations = asyncHandler(async (req, res) => {
   const me = req.user.id;
 
-  // All messages involving me
-  const { data, error } = await supabaseAdmin
+  const { data: msgs, error } = await supabaseAdmin
     .from("messages")
-    .select(`
-      id, content, created_at, is_read, from_user, to_user,
-      sender:profiles!messages_from_user_fkey(id, name, username, avatar_url),
-      receiver:profiles!messages_to_user_fkey(id, name, username, avatar_url)
-    `)
+    .select("id, content, created_at, is_read, from_user, to_user")
     .or(`from_user.eq.${me},to_user.eq.${me}`)
     .order("created_at", { ascending: false });
 
   if (error) throw new ApiError(500, error.message);
 
-  // Group by partner, keep latest message per conversation
+  const partnerIds = [...new Set((msgs || []).map(m => m.from_user === me ? m.to_user : m.from_user))];
+
+  let profileMap = {};
+  if (partnerIds.length > 0) {
+    const { data: profiles } = await supabaseAdmin
+      .from("profiles")
+      .select("id, name, username, avatar_url")
+      .in("id", partnerIds);
+    (profiles || []).forEach(p => { profileMap[p.id] = p; });
+  }
+
   const map = new Map();
-  for (const msg of data || []) {
+  for (const msg of msgs || []) {
     const partnerId = msg.from_user === me ? msg.to_user : msg.from_user;
     if (!map.has(partnerId)) {
-      const partner = msg.from_user === me ? msg.receiver : msg.sender;
-      map.set(partnerId, { partner, latestMessage: msg, unread: (!msg.is_read && msg.to_user === me) ? 1 : 0 });
+      map.set(partnerId, {
+        partner: profileMap[partnerId] || { id: partnerId, name: "Unknown", username: "unknown", avatar_url: null },
+        latestMessage: msg,
+        unread: (!msg.is_read && msg.to_user === me) ? 1 : 0
+      });
     } else if (!msg.is_read && msg.to_user === me) {
       map.get(partnerId).unread += 1;
     }
@@ -41,10 +49,7 @@ export const getMessages = asyncHandler(async (req, res) => {
 
   let query = supabaseAdmin
     .from("messages")
-    .select(`
-      id, content, created_at, is_read, from_user, to_user,
-      sender:profiles!messages_from_user_fkey(id, name, username, avatar_url)
-    `)
+    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles(id, name, username, avatar_url)")
     .or(`and(from_user.eq.${me},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${me})`)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -54,7 +59,6 @@ export const getMessages = asyncHandler(async (req, res) => {
   const { data, error } = await query;
   if (error) throw new ApiError(500, error.message);
 
-  // Mark messages from the other user as read
   supabaseAdmin.from("messages")
     .update({ is_read: true })
     .eq("from_user", userId)
@@ -73,19 +77,14 @@ export const sendMessage = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("messages")
     .insert({ from_user: req.user.id, to_user: userId, content: content.trim() })
-    .select(`
-      id, content, created_at, is_read, from_user, to_user,
-      sender:profiles!messages_from_user_fkey(id, name, username, avatar_url)
-    `)
+    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles(id, name, username, avatar_url)")
     .single();
 
   if (error) throw new ApiError(500, error.message);
 
-  // Real-time broadcast to recipient and sender (multi-device)
   broadcastToUser(userId, { type: "new_message", message: data });
   broadcastToUser(req.user.id, { type: "new_message", message: data });
 
-  // Notify the recipient (background)
   supabaseAdmin.from("notifications")
     .insert({ user_id: userId, actor_id: req.user.id, type: "message" })
     .then(({ error: nErr }) => { if (nErr) console.error("[notif] message insert failed:", nErr.message); })
