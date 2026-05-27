@@ -49,7 +49,7 @@ export const getMessages = asyncHandler(async (req, res) => {
 
   let query = supabaseAdmin
     .from("messages")
-    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles(id, name, username, avatar_url)")
+    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles!from_user(id, name, username, avatar_url)")
     .or(`and(from_user.eq.${me},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${me})`)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -77,7 +77,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("messages")
     .insert({ from_user: req.user.id, to_user: userId, content: content.trim() })
-    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles(id, name, username, avatar_url)")
+    .select("id, content, created_at, is_read, from_user, to_user, sender:profiles!from_user(id, name, username, avatar_url)")
     .single();
 
   if (error) throw new ApiError(500, error.message);
