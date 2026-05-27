@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ChevronLeft, Moon, Bell, Shield, HelpCircle, LogOut, ChevronRight, User, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import BottomNav from "@/components/shared/BottomNav";
 import { useAuthStore } from "@/store/authStore";
+import api from "@/services/api";
 
 const Toggle = ({ on, onToggle }: { on: boolean; onToggle: () => void }) => (
   <button onClick={onToggle} style={{ width:44, height:26, borderRadius:13, background: on ? "linear-gradient(to right,#8B5CF6,#EC4899)" : "rgba(255,255,255,0.12)", border:"none", cursor:"pointer", position:"relative", transition:"all 0.3s", flexShrink:0 }}>
@@ -16,11 +17,36 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const [toggles, setToggles] = useState({ darkMode:true, notifications:true, dailyReminder:true, anonymous:false, aiStories:true });
-  const toggle = (key: keyof typeof toggles) => setToggles(t => ({ ...t, [key]: !t[key] }));
+  const [saving, setSaving] = useState(false);
+  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const displayName = (user as any)?.name || (user as any)?.email?.split("@")[0] || "User";
   const username = (user as any)?.username || (user as any)?.email?.split("@")[0] || "user";
   const avatarUrl = (user as any)?.avatar_url || null;
+
+  // Load saved preferences on mount
+  useEffect(() => {
+    api.get("/users/me").then(r => {
+      const prefs = r.data.data.profile?.preferences;
+      if (prefs && typeof prefs === "object") {
+        setToggles(t => ({ ...t, ...prefs }));
+      }
+    }).catch(() => {});
+  }, []);
+
+  const toggle = (key: keyof typeof toggles) => {
+    const next = { ...toggles, [key]: !toggles[key] };
+    setToggles(next);
+    // Debounce save
+    if (saveTimeout.current) clearTimeout(saveTimeout.current);
+    saveTimeout.current = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await api.put("/users/me/preferences", { preferences: next });
+      } catch {}
+      setSaving(false);
+    }, 800);
+  };
 
   const handleLogout = () => {
     logout();
@@ -38,11 +64,11 @@ export default function SettingsPage() {
     {
       title:"Preferences",
       items:[
-        { icon:Moon,    label:"Dark Mode",        sub:"Coming soon", hasToggle:true, key:"darkMode", comingSoon:true },
+        { icon:Moon,    label:"Dark Mode",        sub:"Coming soon",                   hasToggle:true, key:"darkMode",      comingSoon:true },
         { icon:Bell,    label:"Notifications",    sub:"Likes, comments, follows",      hasToggle:true, key:"notifications", comingSoon:true },
-        { icon:Bell,    label:"Daily Reminder",   sub:"Coming soon", hasToggle:true, key:"dailyReminder", comingSoon:true },
+        { icon:Bell,    label:"Daily Reminder",   sub:"Coming soon",                   hasToggle:true, key:"dailyReminder", comingSoon:true },
         { icon:Shield,  label:"Anonymous Mode",   sub:"Hide your name on new stories", hasToggle:true, key:"anonymous" },
-        { icon:Sparkles,label:"AI Story Feed",    sub:"Show AI-generated stories",     hasToggle:true, key:"aiStories", comingSoon:true },
+        { icon:Sparkles,label:"AI Story Feed",    sub:"Show AI-generated stories",     hasToggle:true, key:"aiStories" },
       ]
     },
     {
@@ -64,6 +90,7 @@ export default function SettingsPage() {
             <ChevronLeft size={18} color="rgba(255,255,255,0.7)" />
           </Link>
           <h1 style={{ fontSize:20, fontWeight:800, color:"white", margin:0 }}>Settings</h1>
+          {saving && <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginLeft:"auto" }}>Saving...</span>}
         </div>
       </div>
 

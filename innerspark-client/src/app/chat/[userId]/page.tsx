@@ -48,9 +48,11 @@ export default function ChatConversationPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [online, setOnline] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadMessages = useCallback(async (initial = false) => {
     try {
@@ -60,28 +62,61 @@ export default function ChatConversationPage() {
       if (initial && msgs.length > 0) {
         const first = msgs[0];
         const senderData = first.from_user === userId ? first.sender : null;
-        if (senderData) setPartner(senderData);
+        if (senderData) setPartner(senderData as Partner);
       }
     } catch {
-      // ignore polling errors
+      // ignore
     } finally {
       if (initial) setLoading(false);
     }
   }, [userId]);
 
+  const connectWS = useCallback(() => {
+    if (!me) return;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+    const wsBase = apiUrl.replace("/api", "").replace("https://", "wss://").replace("http://", "ws://");
+    const ws = new WebSocket(`${wsBase}?userId=${me}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => setOnline(true);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "new_message") {
+          const msg: Message = data.message;
+          const isThisConv =
+            (msg.from_user === userId && msg.to_user === me) ||
+            (msg.from_user === me && msg.to_user === userId);
+          if (isThisConv) {
+            setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+          }
+        }
+      } catch {}
+    };
+
+    ws.onclose = () => {
+      setOnline(false);
+      reconnectRef.current = setTimeout(() => connectWS(), 3000);
+    };
+
+    ws.onerror = () => ws.close();
+  }, [me, userId]);
+
   useEffect(() => {
-    // Load partner profile by ID
     api.get(`/users/id/${userId}`).then(r => {
       const p = r.data.data.profile;
       if (p) setPartner({ id: p.id, name: p.name, username: p.username, avatar_url: p.avatar_url });
     }).catch(() => {});
 
     loadMessages(true);
+    connectWS();
 
-    // Poll for new messages every 3 seconds
-    pollRef.current = setInterval(() => loadMessages(false), 3000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [userId, loadMessages]);
+    return () => {
+      if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      wsRef.current?.close();
+    };
+  }, [userId, loadMessages, connectWS]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,9 +130,9 @@ export default function ChatConversationPage() {
     try {
       const { data } = await api.post(`/messages/${userId}`, { content: trimmed });
       const newMsg: Message = data.data.message;
-      setMessages(prev => [...prev, newMsg]);
+      setMessages(prev => prev.find(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
     } catch {
-      setText(trimmed); // restore on error
+      setText(trimmed);
     } finally {
       setSending(false);
       inputRef.current?.focus();
@@ -105,13 +140,9 @@ export default function ChatConversationPage() {
   };
 
   const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMsg();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMsg(); }
   };
 
-  // Group messages by date
   const grouped: { label: string; msgs: Message[] }[] = [];
   for (const msg of messages) {
     const label = formatDateLabel(msg.created_at);
@@ -130,15 +161,20 @@ export default function ChatConversationPage() {
           <ChevronLeft size={24} />
         </button>
 
-        <div style={{ width:40, height:40, borderRadius:"50%", background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, overflow:"hidden", flexShrink:0 }}>
+        <div style={{ width:40, height:40, borderRadius:"50%", background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, overflow:"hidden", flexShrink:0, position:"relative" }}>
           {partner?.avatar_url
             ? <img src={partner.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" />
             : "👤"}
+          {online && (
+            <div style={{ position:"absolute", bottom:1, right:1, width:10, height:10, borderRadius:"50%", background:"#34D399", border:"2px solid #0D0D14" }} />
+          )}
         </div>
 
         <div style={{ flex:1 }}>
           <div style={{ fontSize:15, fontWeight:700, color:"white" }}>{partner?.name || partner?.username || "..."}</div>
-          <div style={{ fontSize:11, color:"rgba(139,92,246,0.8)" }}>@{partner?.username || "..."}</div>
+          <div style={{ fontSize:11, color: online ? "#34D399" : "rgba(139,92,246,0.8)" }}>
+            {online ? "Online" : `@${partner?.username || "..."}`}
+          </div>
         </div>
 
         <div style={{ display:"flex", gap:8 }}>
@@ -153,7 +189,6 @@ export default function ChatConversationPage() {
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"16px" }} className="no-scrollbar">
-
         {loading && (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {[1,2,3].map(i => (
@@ -175,13 +210,11 @@ export default function ChatConversationPage() {
 
         {!loading && grouped.map(group => (
           <div key={group.label}>
-            {/* Date label */}
             <div style={{ textAlign:"center", margin:"12px 0 8px" }}>
               <span style={{ fontSize:11, color:"rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.05)", borderRadius:50, padding:"3px 12px", fontWeight:600 }}>
                 {group.label}
               </span>
             </div>
-
             <AnimatePresence initial={false}>
               {group.msgs.map((msg) => {
                 const isMine = msg.from_user === me;
@@ -202,14 +235,9 @@ export default function ChatConversationPage() {
                       <div style={{
                         padding:"10px 14px",
                         borderRadius: isMine ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                        background: isMine
-                          ? "linear-gradient(135deg,#7C3AED,#EC4899)"
-                          : "rgba(255,255,255,0.07)",
+                        background: isMine ? "linear-gradient(135deg,#7C3AED,#EC4899)" : "rgba(255,255,255,0.07)",
                         border: isMine ? "none" : "1px solid rgba(255,255,255,0.08)",
-                        fontSize:14,
-                        color:"white",
-                        lineHeight:1.5,
-                        wordBreak:"break-word",
+                        fontSize:14, color:"white", lineHeight:1.5, wordBreak:"break-word",
                       }}>
                         {msg.content}
                       </div>
@@ -223,7 +251,6 @@ export default function ChatConversationPage() {
             </AnimatePresence>
           </div>
         ))}
-
         <div ref={bottomRef} />
       </div>
 
@@ -237,9 +264,7 @@ export default function ChatConversationPage() {
           placeholder="Type a message..."
           style={{ flex:1, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.09)", borderRadius:22, padding:"12px 18px", color:"white", fontSize:14, outline:"none", fontFamily:"Inter,sans-serif" }}
         />
-        <button
-          onClick={sendMsg}
-          disabled={!text.trim() || sending}
+        <button onClick={sendMsg} disabled={!text.trim() || sending}
           style={{ width:44, height:44, borderRadius:"50%", background: text.trim() ? "linear-gradient(135deg,#8B5CF6,#EC4899)" : "rgba(255,255,255,0.06)", border:"none", cursor: text.trim() ? "pointer" : "default", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, transition:"all 0.2s", boxShadow: text.trim() ? "0 0 16px rgba(139,92,246,0.4)" : "none" }}>
           <Send size={18} color={text.trim() ? "white" : "rgba(255,255,255,0.3)"} />
         </button>
