@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Bell, Search, Flame, Heart, Bookmark, MessageCircle, Share2, Sparkles, RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -57,13 +57,16 @@ export default function FeedPage() {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [retrying, setRetrying] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const displayName = (user as any)?.name || "there";
 
-  const fetchStories = useCallback(async (category?: string) => {
-    setLoading(true);
-    setError("");
+  const fetchStories = useCallback(async (category?: string, attempt = 1) => {
+    if (retryTimerRef.current) { clearTimeout(retryTimerRef.current); retryTimerRef.current = null; }
+    if (attempt === 1) { setLoading(true); setError(""); setRetrying(false); }
+
     try {
       const params = category && category !== "All" ? `?category=${category}` : "";
       const [storiesRes, likedRes] = await Promise.allSettled([
@@ -71,7 +74,9 @@ export default function FeedPage() {
         api.get("/users/me/liked-ids"),
       ]);
 
-      const raw: Story[] = storiesRes.status === "fulfilled" ? storiesRes.value.data.data.stories || [] : [];
+      if (storiesRes.status === "rejected") throw new Error("failed");
+
+      const raw: Story[] = storiesRes.value.data.data.stories || [];
       const likedIds: string[] = likedRes.status === "fulfilled" ? likedRes.value.data.data.likedIds || [] : [];
       const likedSet = new Set(likedIds);
 
@@ -81,22 +86,26 @@ export default function FeedPage() {
         isBookmarked: false,
         localLikes: s.reactions?.[0]?.count ?? 0,
       })));
-
-      if (storiesRes.status === "rejected") {
-        setError("Couldn't load stories. Make sure the backend is running.");
-        setStories([]);
-      }
-    } catch {
-      setError("Couldn't load stories. Make sure the backend is running.");
-      setStories([]);
-    } finally {
       setLoading(false);
+      setRetrying(false);
+    } catch {
+      if (attempt === 1) {
+        setLoading(false);
+        setRetrying(true);
+        retryTimerRef.current = setTimeout(() => fetchStories(category, 2), 8000);
+        return;
+      }
+      setError("Couldn't load stories.");
+      setStories([]);
+      setLoading(false);
+      setRetrying(false);
     }
   }, []);
 
   useEffect(() => {
     fetchStories();
     api.get("/messages/unread").then(r => setNotifCount(r.data.data.unread || 0)).catch(() => {});
+    return () => { if (retryTimerRef.current) clearTimeout(retryTimerRef.current); };
   }, [fetchStories]);
 
   const handleCat = (cat: string) => {
@@ -201,8 +210,21 @@ export default function FeedPage() {
           </div>
         )}
 
+        {/* Waking up state */}
+        {!loading && retrying && (
+          <div style={{ textAlign:"center", padding:"60px 20px" }}>
+            <div style={{ fontSize:40, marginBottom:14 }}>☕</div>
+            <h3 style={{ fontSize:16, fontWeight:700, color:"white", margin:"0 0 8px" }}>Waking up server...</h3>
+            <p style={{ fontSize:13, color:"rgba(255,255,255,0.4)", margin:"0 0 20px" }}>Just a moment, this takes ~10 seconds on first load.</p>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+              <RefreshCw size={14} color="#A78BFA" style={{ animation:"spin 1.2s linear infinite" }} />
+              <span style={{ fontSize:13, color:"#A78BFA", fontFamily:"Inter,sans-serif" }}>Retrying automatically...</span>
+            </div>
+          </div>
+        )}
+
         {/* Error state */}
-        {!loading && error && (
+        {!loading && !retrying && error && (
           <div style={{ textAlign:"center", padding:"60px 20px" }}>
             <div style={{ fontSize:40, marginBottom:14 }}>⚡</div>
             <h3 style={{ fontSize:16, fontWeight:700, color:"white", margin:"0 0 8px" }}>Can't connect to server</h3>
@@ -215,7 +237,7 @@ export default function FeedPage() {
         )}
 
         {/* Empty state */}
-        {!loading && !error && stories.length === 0 && (
+        {!loading && !retrying && !error && stories.length === 0 && (
           <div style={{ textAlign:"center", padding:"60px 20px" }}>
             <div style={{ fontSize:48, marginBottom:16 }}>📖</div>
             <h3 style={{ fontSize:18, fontWeight:700, color:"white", margin:"0 0 8px" }}>No stories yet</h3>
