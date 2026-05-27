@@ -44,15 +44,17 @@ export default function DashboardPage() {
   const [selectedMood, setSelectedMood] = useState<string>("");
   const [moodSaved, setMoodSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [notifCount, setNotifCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [statsRes, activityRes, moodRes] = await Promise.allSettled([
+        const [statsRes, activityRes, moodRes, notifRes] = await Promise.allSettled([
           api.get("/dashboard/stats"),
           api.get("/dashboard/activity"),
           api.get("/dashboard/mood/history?days=1"),
+          api.get("/notifications/unread-count"),
         ]);
         if (statsRes.status === "fulfilled") setStats(statsRes.value.data.data);
         if (activityRes.status === "fulfilled") setActivity(activityRes.value.data.data.activity || []);
@@ -60,6 +62,7 @@ export default function DashboardPage() {
           const todayMood = moodRes.value.data.data.moods?.[0];
           if (todayMood) { setSelectedMood(todayMood.mood); setMoodSaved(true); }
         }
+        if (notifRes.status === "fulfilled") setNotifCount(notifRes.value.data.data.count || 0);
       } finally {
         setLoading(false);
       }
@@ -111,7 +114,11 @@ export default function DashboardPage() {
           <Link href="/notifications">
             <div style={{ width:38, height:38, borderRadius:12, background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.08)", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
               <Bell size={17} color="rgba(255,255,255,0.6)" />
-              <div style={{ position:"absolute", top:8, right:8, width:7, height:7, borderRadius:"50%", background:"#EC4899", border:"1.5px solid #0D0D14" }} />
+              {notifCount > 0 && (
+                <div style={{ position:"absolute", top:-4, right:-4, minWidth:16, height:16, borderRadius:8, background:"#EC4899", border:"2px solid #0D0D14", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 3px" }}>
+                  <span style={{ fontSize:9, fontWeight:700, color:"white" }}>{notifCount > 9 ? "9+" : notifCount}</span>
+                </div>
+              )}
             </div>
           </Link>
         </div>

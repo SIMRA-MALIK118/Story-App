@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { MessageSquare, Search, Edit2 } from "lucide-react";
+import { MessageSquare, Search, Edit2, X, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BottomNav from "@/components/shared/BottomNav";
 import api from "@/services/api";
 
@@ -22,9 +23,15 @@ interface Conversation {
 }
 
 export default function ChatPage() {
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showCompose, setShowCompose] = useState(false);
+  const [composeQuery, setComposeQuery] = useState("");
+  const [foundUser, setFoundUser] = useState<{ id: string; name: string; username: string; avatar_url: string | null } | null>(null);
+  const [composeLoading, setComposeLoading] = useState(false);
+  const [composeError, setComposeError] = useState("");
 
   useEffect(() => {
     api.get("/messages")
@@ -32,6 +39,21 @@ export default function ChatPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const searchUser = async () => {
+    if (!composeQuery.trim()) return;
+    setComposeLoading(true);
+    setComposeError("");
+    setFoundUser(null);
+    try {
+      const { data } = await api.get(`/users/${composeQuery.trim().replace("@", "")}`);
+      setFoundUser(data.data.profile);
+    } catch {
+      setComposeError("User not found. Check the username.");
+    } finally {
+      setComposeLoading(false);
+    }
+  };
 
   const filtered = conversations.filter(c =>
     c.partner.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -51,9 +73,10 @@ export default function ChatPage() {
             </div>
             <h1 style={{ fontSize:22, fontWeight:800, color:"white", margin:0, letterSpacing:-0.5 }}>Chats</h1>
           </div>
-          <div style={{ width:38, height:38, borderRadius:12, background:"rgba(139,92,246,0.15)", border:"1px solid rgba(139,92,246,0.25)", display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <button onClick={() => { setShowCompose(true); setFoundUser(null); setComposeQuery(""); setComposeError(""); }}
+            style={{ width:38, height:38, borderRadius:12, background:"rgba(139,92,246,0.15)", border:"1px solid rgba(139,92,246,0.25)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
             <Edit2 size={16} color="#A78BFA" />
-          </div>
+          </button>
         </div>
 
         {/* Search */}
@@ -135,6 +158,49 @@ export default function ChatPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Compose modal */}
+      {showCompose && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:50, display:"flex", alignItems:"flex-end" }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCompose(false); }}>
+          <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+            style={{ width:"100%", background:"#1a1a2e", borderRadius:"24px 24px 0 0", padding:"24px 20px 40px", border:"1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+              <h3 style={{ fontSize:16, fontWeight:700, color:"white", margin:0 }}>New Message</h3>
+              <button onClick={() => setShowCompose(false)} style={{ background:"none", border:"none", cursor:"pointer", color:"rgba(255,255,255,0.4)" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+              <div style={{ position:"relative", flex:1 }}>
+                <UserPlus size={15} color="rgba(255,255,255,0.3)" style={{ position:"absolute", left:13, top:"50%", transform:"translateY(-50%)" }} />
+                <input value={composeQuery} onChange={e => setComposeQuery(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && searchUser()}
+                  placeholder="Enter username..."
+                  style={{ width:"100%", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:12, padding:"12px 12px 12px 38px", color:"white", fontSize:14, outline:"none", fontFamily:"Inter,sans-serif", boxSizing:"border-box" }} />
+              </div>
+              <button onClick={searchUser} disabled={composeLoading}
+                style={{ padding:"12px 18px", borderRadius:12, background:"linear-gradient(to right,#8B5CF6,#EC4899)", border:"none", color:"white", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"Inter,sans-serif" }}>
+                {composeLoading ? "..." : "Find"}
+              </button>
+            </div>
+            {composeError && <p style={{ fontSize:13, color:"#F87171", margin:"0 0 12px" }}>{composeError}</p>}
+            {foundUser && (
+              <button onClick={() => { router.push(`/chat/${foundUser.id}`); setShowCompose(false); }}
+                style={{ width:"100%", display:"flex", alignItems:"center", gap:14, padding:"14px", borderRadius:16, background:"rgba(139,92,246,0.1)", border:"1px solid rgba(139,92,246,0.2)", cursor:"pointer", textAlign:"left" }}>
+                <div style={{ width:44, height:44, borderRadius:"50%", background:"linear-gradient(135deg,#8B5CF6,#EC4899)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, overflow:"hidden" }}>
+                  {foundUser.avatar_url ? <img src={foundUser.avatar_url} style={{ width:"100%", height:"100%", objectFit:"cover" }} alt="" /> : "👤"}
+                </div>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:700, color:"white" }}>{foundUser.name}</div>
+                  <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)" }}>@{foundUser.username}</div>
+                </div>
+                <div style={{ marginLeft:"auto", fontSize:12, color:"#A78BFA", fontWeight:600 }}>Message →</div>
+              </button>
+            )}
+          </motion.div>
+        </div>
+      )}
 
       <BottomNav />
     </div>

@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
 import api from "@/services/api";
 import { useAuthStore } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -23,6 +24,13 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", password: "" });
+
+  const handleGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +73,7 @@ export default function LoginPage() {
         style={{ flex: 1, margin: "0 16px", background: "rgba(255,255,255,0.04)", backdropFilter: "blur(20px)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 24, padding: "28px 20px", display: "flex", flexDirection: "column", gap: 16 }}
       >
         {/* Google btn */}
-        <button style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "14px", borderRadius: 14, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", cursor: "pointer", color: "white", fontSize: 14, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>
+        <button onClick={handleGoogle} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: "14px", borderRadius: 14, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)", cursor: "pointer", color: "white", fontSize: 14, fontWeight: 600, fontFamily: "Inter,sans-serif" }}>
           <GoogleIcon /> Continue with Google
         </button>
 

@@ -31,18 +31,18 @@ export default function SettingsPage() {
     {
       title:"Account",
       items:[
-        { icon:User, label:"Edit Profile", sub:"Update your name & bio", hasToggle:false, href:"/profile" },
+        { icon:User, label:"Edit Profile", sub:"Update your name & bio", hasToggle:false, href:"/profile/edit" },
         { icon:Sparkles, label:"Upgrade to Pro", sub:"Unlimited AI · Custom badge", hasToggle:false, href:"#", accent:true },
       ]
     },
     {
       title:"Preferences",
       items:[
-        { icon:Moon,   label:"Dark Mode",        sub:"Always on for best experience", hasToggle:true, key:"darkMode" },
-        { icon:Bell,   label:"Notifications",    sub:"Likes, comments, follows",       hasToggle:true, key:"notifications" },
-        { icon:Bell,   label:"Daily Reminder",   sub:"Read 1 story every day",         hasToggle:true, key:"dailyReminder" },
-        { icon:Shield, label:"Anonymous Mode",   sub:"Hide your name on new stories",  hasToggle:true, key:"anonymous" },
-        { icon:Sparkles,label:"AI Story Feed",   sub:"Show AI-generated stories",      hasToggle:true, key:"aiStories" },
+        { icon:Moon,    label:"Dark Mode",        sub:"Coming soon", hasToggle:true, key:"darkMode", comingSoon:true },
+        { icon:Bell,    label:"Notifications",    sub:"Likes, comments, follows",      hasToggle:true, key:"notifications", comingSoon:true },
+        { icon:Bell,    label:"Daily Reminder",   sub:"Coming soon", hasToggle:true, key:"dailyReminder", comingSoon:true },
+        { icon:Shield,  label:"Anonymous Mode",   sub:"Hide your name on new stories", hasToggle:true, key:"anonymous" },
+        { icon:Sparkles,label:"AI Story Feed",    sub:"Show AI-generated stories",     hasToggle:true, key:"aiStories", comingSoon:true },
       ]
     },
     {
@@ -91,7 +91,8 @@ export default function SettingsPage() {
                 const Icon = item.icon;
                 const isLast = ii === section.items.length - 1;
                 return (
-                  <div key={ii} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.05)", cursor:"pointer" }}>
+                  <div key={ii} onClick={() => (item as any).href && (item as any).href !== "#" && router.push((item as any).href)}
+                    style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 16px", borderBottom: isLast ? "none" : "1px solid rgba(255,255,255,0.05)", cursor: (item as any).href && (item as any).href !== "#" ? "pointer" : "default" }}>
                     <div style={{ width:36, height:36, borderRadius:11, background: (item as any).accent ? "linear-gradient(135deg,#8B5CF6,#EC4899)" : "rgba(255,255,255,0.06)", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
                       <Icon size={17} color={(item as any).accent ? "white" : "rgba(255,255,255,0.6)"} />
                     </div>
@@ -99,10 +100,18 @@ export default function SettingsPage() {
                       <div style={{ fontSize:14, fontWeight:600, color:(item as any).accent ? "#A78BFA" : "white" }}>{item.label}</div>
                       {"sub" in item && <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)" }}>{item.sub}</div>}
                     </div>
-                    {item.hasToggle && "key" in item
-                      ? <Toggle on={toggles[item.key as keyof typeof toggles]} onToggle={() => toggle(item.key as keyof typeof toggles)} />
-                      : <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
-                    }
+                    {item.hasToggle && "key" in item ? (
+                      <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                        {(item as any).comingSoon && <span style={{ fontSize:9, background:"rgba(139,92,246,0.15)", border:"1px solid rgba(139,92,246,0.2)", borderRadius:50, padding:"2px 7px", color:"#A78BFA", fontWeight:600 }}>SOON</span>}
+                        <Toggle on={toggles[item.key as keyof typeof toggles]} onToggle={() => toggle(item.key as keyof typeof toggles)} />
+                      </div>
+                    ) : (item as any).href ? (
+                      <Link href={(item as any).href} style={{ display:"contents", textDecoration:"none" }}>
+                        <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
+                      </Link>
+                    ) : (
+                      <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
+                    )}
                   </div>
                 );
               })}
