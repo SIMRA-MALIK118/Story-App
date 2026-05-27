@@ -23,6 +23,22 @@ export const getFeed = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, { stories: data, total: count, page: +page, limit: +limit }));
 });
 
+export const searchStories = asyncHandler(async (req, res) => {
+  const { q } = req.query;
+  if (!q?.trim()) return res.json(new ApiResponse(200, { stories: [] }));
+
+  const { data, error } = await supabaseAdmin
+    .from("stories")
+    .select(`*, profiles(id, name, username, avatar_url), reactions(count)`)
+    .eq("is_published", true)
+    .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+    .order("views_count", { ascending: false })
+    .limit(30);
+
+  if (error) throw new ApiError(500, error.message);
+  res.json(new ApiResponse(200, { stories: data || [] }));
+});
+
 export const getTrending = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("stories")
