@@ -78,19 +78,25 @@ export default function ChatConversationPage() {
     const ws = new WebSocket(`${wsBase}?userId=${me}`);
     wsRef.current = ws;
 
-    ws.onopen = () => setOnline(true);
+    ws.onopen = () => {};
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === "new_message") {
-          const msg: Message = data.message;
+        const payload = JSON.parse(event.data);
+        if (payload.type === "new_message") {
+          const msg: Message = payload.message;
           const isThisConv =
             (msg.from_user === userId && msg.to_user === me) ||
             (msg.from_user === me && msg.to_user === userId);
           if (isThisConv) {
             setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
           }
+        } else if (payload.type === "online_users") {
+          setOnline((payload.userIds as string[]).includes(userId));
+        } else if (payload.type === "user_online" && payload.userId === userId) {
+          setOnline(true);
+        } else if (payload.type === "user_offline" && payload.userId === userId) {
+          setOnline(false);
         }
       } catch {}
     };
