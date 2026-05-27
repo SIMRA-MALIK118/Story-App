@@ -118,14 +118,13 @@ export default function ExplorePage() {
     setLoading(true);
     try {
       const [storiesRes, likedSet] = await Promise.all([
-        api.get("/stories/feed"),
+        api.get(`/stories/search?q=${encodeURIComponent(query.trim())}`),
         getLikedSet(),
       ]);
-      const all: Story[] = (storiesRes.data.data.stories || []).map((s: Story) => ({
+      const raw: Story[] = storiesRes.data.data.stories || [];
+      setStories(raw.map(s => ({
         ...s, isLiked: likedSet.has(s.id), localLikes: s.reactions?.[0]?.count ?? 0, isFollowing: false,
-      }));
-      const q = query.toLowerCase();
-      setStories(all.filter(s => s.title.toLowerCase().includes(q) || s.content.toLowerCase().includes(q)));
+      })));
     } catch {
       setStories([]);
     } finally {

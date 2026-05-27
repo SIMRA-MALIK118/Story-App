@@ -46,6 +46,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState(0);
   const [myStories, setMyStories] = useState<StoryItem[]>([]);
   const [savedStories, setSavedStories] = useState<StoryItem[]>([]);
+  const [likedStories, setLikedStories] = useState<StoryItem[]>([]);
   const [stats, setStats] = useState<Stats>({ stories:0, followers:0, following:0, reads:0, likes:0, streak:0, xp:0 });
   const [loading, setLoading] = useState(true);
 
@@ -86,14 +87,17 @@ export default function ProfilePage() {
   }, [userId, username]);
 
   useEffect(() => {
-    if (activeTab === 2) {
+    if (activeTab === 1 && likedStories.length === 0) {
+      api.get("/users/me/liked").then(r => setLikedStories(r.data.data.stories || [])).catch(() => {});
+    }
+    if (activeTab === 2 && savedStories.length === 0) {
       api.get("/users/me/saved").then(r => setSavedStories(r.data.data.stories || [])).catch(() => {});
     }
   }, [activeTab]);
 
   const formatNum = (n: number) => n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(n);
 
-  const currentStories = activeTab === 0 ? myStories : activeTab === 2 ? savedStories : [];
+  const currentStories = activeTab === 0 ? myStories : activeTab === 1 ? likedStories : savedStories;
 
   return (
     <div style={{ width:"100%", height:"100%", background:"#0D0D14", display:"flex", flexDirection:"column", position:"relative" }}>
