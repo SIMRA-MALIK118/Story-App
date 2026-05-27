@@ -88,7 +88,8 @@ export const sendMessage = asyncHandler(async (req, res) => {
   // Notify the recipient (background)
   supabaseAdmin.from("notifications")
     .insert({ user_id: userId, actor_id: req.user.id, type: "message" })
-    .then(() => {}).catch(() => {});
+    .then(({ error: nErr }) => { if (nErr) console.error("[notif] message insert failed:", nErr.message); })
+    .catch(e => console.error("[notif] message insert error:", e.message));
 
   res.status(201).json(new ApiResponse(201, { message: data }));
 });

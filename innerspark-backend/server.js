@@ -3,7 +3,7 @@ config();
 
 import http from "http";
 import { WebSocketServer } from "ws";
-import { clients } from "./src/utils/wsClients.js";
+import { clients, broadcastToAll, getOnlineUserIds } from "./src/utils/wsClients.js";
 
 const { default: app } = await import("./src/app.js");
 
@@ -20,9 +20,20 @@ wss.on("connection", (ws, req) => {
   if (!clients.has(userId)) clients.set(userId, new Set());
   clients.get(userId).add(ws);
 
+  // Tell this user who's currently online
+  try {
+    ws.send(JSON.stringify({ type: "online_users", userIds: getOnlineUserIds() }));
+  } catch {}
+
+  // Tell everyone else this user just came online
+  broadcastToAll({ type: "user_online", userId }, userId);
+
   ws.on("close", () => {
     clients.get(userId)?.delete(ws);
-    if (clients.get(userId)?.size === 0) clients.delete(userId);
+    if (clients.get(userId)?.size === 0) {
+      clients.delete(userId);
+      broadcastToAll({ type: "user_offline", userId });
+    }
   });
 
   ws.on("error", () => {
