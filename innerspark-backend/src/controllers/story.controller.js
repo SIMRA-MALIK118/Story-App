@@ -27,16 +27,46 @@ export const searchStories = asyncHandler(async (req, res) => {
   const { q } = req.query;
   if (!q?.trim()) return res.json(new ApiResponse(200, { stories: [] }));
 
-  const { data, error } = await supabaseAdmin
-    .from("stories")
-    .select(`*, profiles(id, name, username, avatar_url), reactions(count)`)
-    .eq("is_published", true)
-    .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
-    .order("views_count", { ascending: false })
-    .limit(30);
+  // Search by title/content AND by author name/username
+  const [storiesRes, profilesRes] = await Promise.allSettled([
+    supabaseAdmin
+      .from("stories")
+      .select(`*, profiles(id, name, username, avatar_url), reactions(count)`)
+      .eq("is_published", true)
+      .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
+      .order("views_count", { ascending: false })
+      .limit(30),
+    supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
+      .limit(20),
+  ]);
 
-  if (error) throw new ApiError(500, error.message);
-  res.json(new ApiResponse(200, { stories: data || [] }));
+  const byText = storiesRes.status === "fulfilled" ? storiesRes.value.data || [] : [];
+
+  let byAuthor = [];
+  if (profilesRes.status === "fulfilled" && profilesRes.value.data?.length) {
+    const authorIds = profilesRes.value.data.map(p => p.id);
+    const { data: authorStories } = await supabaseAdmin
+      .from("stories")
+      .select(`*, profiles(id, name, username, avatar_url), reactions(count)`)
+      .eq("is_published", true)
+      .in("user_id", authorIds)
+      .order("views_count", { ascending: false })
+      .limit(30);
+    byAuthor = authorStories || [];
+  }
+
+  // Merge and deduplicate by id
+  const seen = new Set();
+  const merged = [...byText, ...byAuthor].filter(s => {
+    if (seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  });
+
+  res.json(new ApiResponse(200, { stories: merged }));
 });
 
 export const getTrending = asyncHandler(async (req, res) => {
