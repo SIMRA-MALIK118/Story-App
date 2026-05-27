@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "../config/supabase.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse, ApiError } from "../utils/ApiResponse.js";
+import { broadcastToUser } from "../utils/wsClients.js";
 
 export const getConversations = asyncHandler(async (req, res) => {
   const me = req.user.id;
@@ -79,6 +80,10 @@ export const sendMessage = asyncHandler(async (req, res) => {
     .single();
 
   if (error) throw new ApiError(500, error.message);
+
+  // Real-time broadcast to recipient and sender (multi-device)
+  broadcastToUser(userId, { type: "new_message", message: data });
+  broadcastToUser(req.user.id, { type: "new_message", message: data });
 
   // Notify the recipient (background)
   supabaseAdmin.from("notifications")

@@ -139,6 +139,31 @@ export const getProfileById = asyncHandler(async (req, res) => {
   res.json(new ApiResponse(200, { profile }));
 });
 
+export const getMe = asyncHandler(async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("*")
+    .eq("id", req.user.id)
+    .single();
+  if (error || !data) throw new ApiError(404, "Profile not found");
+  res.json(new ApiResponse(200, { profile: data }));
+});
+
+export const updatePreferences = asyncHandler(async (req, res) => {
+  const { preferences } = req.body;
+  if (!preferences || typeof preferences !== "object") throw new ApiError(400, "Invalid preferences");
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .update({ preferences, updated_at: new Date().toISOString() })
+    .eq("id", req.user.id)
+    .select("preferences")
+    .single();
+
+  if (error) throw new ApiError(500, error.message);
+  res.json(new ApiResponse(200, { preferences: data.preferences }, "Preferences saved"));
+});
+
 export const getLikedStories = asyncHandler(async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from("reactions")
